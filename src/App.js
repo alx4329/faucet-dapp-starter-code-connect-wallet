@@ -1,8 +1,14 @@
 import { useEffect, useState } from "react";
 import "./App.css";
-
+import {ethers} from 'ethers'
+import faucetContract from "./ethereum/faucet";
 function App() {
   const [walletAddress, setWalletAddress] = useState("");
+  const [signer, setSigner] = useState('')
+  const [fcContract, setFcContract] = useState()
+  const [withdrawError, setWithdrawError] = useState('')
+  const [withdrawSuccess, setWithdrawSuccess] = useState('')
+  const [transactionData, setTransactionData] = useState('')
 
   useEffect(() => {
     getCurrentWalletConnected();
@@ -13,9 +19,15 @@ function App() {
     if (typeof window != "undefined" && typeof window.ethereum != "undefined") {
       try {
         /* MetaMask is installed */
-        const accounts = await window.ethereum.request({
-          method: "eth_requestAccounts",
-        });
+        //get provider
+        const provider = new ethers.providers.Web3Provider(window.ethereum)
+        //get accounts
+        const accounts = await provider.send('eth_requestAccounts',[])
+        //get signer 
+        setSigner(provider.getSigner())
+        //local constract instance 
+        setFcContract(faucetContract(provider))
+
         setWalletAddress(accounts[0]);
         console.log(accounts[0]);
       } catch (err) {
@@ -30,10 +42,16 @@ function App() {
   const getCurrentWalletConnected = async () => {
     if (typeof window != "undefined" && typeof window.ethereum != "undefined") {
       try {
-        const accounts = await window.ethereum.request({
-          method: "eth_accounts",
-        });
+        //get provider
+        const provider = new ethers.providers.Web3Provider(window.ethereum)
+        //get accounts
+        const accounts = await provider.send('eth_accounts',[])
+        
         if (accounts.length > 0) {
+          //get signer 
+          setSigner(provider.getSigner())
+          //local constract instance 
+          setFcContract(faucetContract(provider))
           setWalletAddress(accounts[0]);
           console.log(accounts[0]);
         } else {
@@ -60,7 +78,20 @@ function App() {
       console.log("Please install MetaMask");
     }
   };
-
+  const getOCTHandler = async () => {
+    try{
+      setWithdrawError('')
+      setWithdrawSuccess('')
+      const fcContractWithSigner = fcContract.connect(signer)
+      const res = await fcContractWithSigner.requestTokens()
+      console.log(res)
+      setWithdrawSuccess('Operation Succeded - enjoy your tokens!')
+      setTransactionData(res.transactionHash)
+    }catch(e){
+      console.log(e)
+      setWithdrawError(e.message)
+    }
+  }
   return (
     <div>
       <nav className="navbar">
@@ -92,6 +123,20 @@ function App() {
           <div className="container has-text-centered main-content">
             <h1 className="title is-1">Faucet</h1>
             <p>Fast and reliable. 50 OCT/day.</p>
+            <div className="mt-5" >
+              {
+                withdrawError && (
+                  <div className="withdraw-error" >{withdrawError}   </div>
+                )
+              }
+            </div>
+            <div className="mt-5" >
+              {
+                withdrawSuccess && (
+                  <div className="withdraw-success" >{withdrawSuccess}</div>
+                )
+              }
+            </div>
             <div className="box address-box">
               <div className="columns">
                 <div className="column is-four-fifths">
@@ -99,10 +144,14 @@ function App() {
                     className="input is-medium"
                     type="text"
                     placeholder="Enter your wallet address (0x...)"
+                    defaultValue={walletAddress}
                   />
                 </div>
                 <div className="column">
-                  <button className="button is-link is-medium">
+                  <button 
+                  onClick={getOCTHandler}
+                  disabled={walletAddress?false:true}
+                  className="button is-link is-medium">
                     GET TOKENS
                   </button>
                 </div>
@@ -110,7 +159,8 @@ function App() {
               <article className="panel is-grey-darker">
                 <p className="panel-heading">Transaction Data</p>
                 <div className="panel-block">
-                  <p>transaction data</p>
+
+                  <p>{transactionData ? `Transaction hash: ${transactionData}`:null}</p>
                 </div>
               </article>
             </div>
